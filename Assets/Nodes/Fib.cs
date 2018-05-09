@@ -9,25 +9,43 @@ public class Fib : MonoBehaviour {
 	// Use this for initialization
 	void Start () {
         global = new GlobalClassTiny();
-        global.levelMax = 3;
+        global.levelMax = 4;
         global.ynStep = true;
-        global.delay = 2;
+        global.ynStepEach = true;
+        global.delay = .5f;
         global.scaleHistory = .75f;
-        global.lengthLinks = 2;
+        global.lengthLinksForward = 2;
+        global.lengthLinksLeft = -2;
+        global.lengthLinksRight = 2;
+        global.lengthLinksUp = 2;
+        global.lengthLinksDown = -2;
         global.parentLinks = new GameObject("parentLinks");
         global.nodes = new List<NodeClass>();
+        global.audioSource1 = gameObject.AddComponent<AudioSource>();
+        global.audioSource1.clip = Resources.Load("sound1") as AudioClip;
+        global.audioSource2 = gameObject.AddComponent<AudioSource>();
+        global.audioSource2.clip = Resources.Load("sound2") as AudioClip;
+        global.ynAudio = false;
         global.timeStart = Time.realtimeSinceStartup;
-        Debug.Log("Level:" + global.level + "................\n");
+        Debug.Log("Fib\n");
         Show();
         //
         Add("0");
-        //Find("0").AdvanceLevel();
-        //Find("1").GiveBirth();
-        //Find("1").AdvanceLevel();
-        //Find("10").AdvanceLevel();
-        //Find("11").AdvanceLevel();
-        //Find("12").GiveBirth();
+//        Manual();
 	}
+
+    void Radius() {
+        
+    }
+
+    void Manual() {
+        Find("0").AdvanceLevel();
+        Find("1").GiveBirth();
+        Find("1").AdvanceLevel();
+        Find("10").AdvanceLevel();
+        Find("11").AdvanceLevel();
+        Find("12").GiveBirth();
+    }
 
     NodeClass Find(string txt) {
         return NodeClass.FindNode(txt, global.nodes);
@@ -40,21 +58,44 @@ public class Fib : MonoBehaviour {
 
     // Update is called once per frame
 	void Update () {
-        if (global.ynStep == true && Time.realtimeSinceStartup - global.timeStart < global.delay || global.level >= global.levelMax) {
+        if (global.ynStep == true && Time.realtimeSinceStartup - global.timeStart < global.delay) {
             return;
         }
-        global.level++;
+        if (global.level >= global.levelMax && global.index >= global.nodes.Count)
+        {
+            return;
+        }
         global.timeStart = Time.realtimeSinceStartup;
-        UpdateNodes();
+        if (global.ynStepEach == true) {
+            UpdateNextNode();
+        } else {
+            UpdateNodes();
+        }
 	}
 
+    void ResetLevel() {
+        global.index = 0;
+        global.level++;
+        Debug.Log("Level:" + global.level + "................(nodes:" + global.nodes.Count + " gos:" + global.cntGameObjects + ")\n");
+    }
+
     void UpdateNodes() {
-        Debug.Log("Level:" + global.level + "................\n");
+        ResetLevel();
         for (int n = 0; n < global.nodes.Count; n++) {
             NodeClass node = global.nodes[n];
             node.AdvanceLevel();
         }
         Show();
+    }
+
+    void UpdateNextNode() {
+        if (global.index >= global.nodes.Count || global.index == 0)
+        {
+            ResetLevel();
+        }
+        NodeClass node = global.nodes[global.index];
+        node.AdvanceLevel();
+        global.index++;
     }
 
     void Show() {
@@ -73,9 +114,20 @@ public class GlobalClassTiny {
     public bool ynStep;
     public int level;
     public int levelMax;
-    public float lengthLinks;
+    public float lengthLinksForward;
+    public float lengthLinksLeft;
+    public float lengthLinksRight;
+    public float lengthLinksUp;
+    public float lengthLinksDown;
     public float scaleHistory;
     public GameObject parentLinks;
+    public int lastLinkInRow;
+    public int index;
+    public bool ynStepEach;
+    public int cntGameObjects;
+    public AudioSource audioSource1;
+    public AudioSource audioSource2;
+    public bool ynAudio;
 }
 
 public class NodeClass {
@@ -105,6 +157,7 @@ public class NodeClass {
     public GameObject AddGo(string txt)
     {
         GameObject goResult = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        global.cntGameObjects++;
         goResult.name = txt;
         goResult.transform.localScale = new Vector3(1f, .1f, 1f);
         AdjustColorByName(goResult);
@@ -114,7 +167,7 @@ public class NodeClass {
     public void AddToNodes(NodeClass node)
     {
         global.nodes.Add(node);
-        node.index = global.nodes.Count;
+        node.index = global.nodes.Count - 1;
     }
     public void AdvanceLevel()
     {
@@ -124,16 +177,16 @@ public class NodeClass {
         }
         Vector3 pos = go.transform.position;
         LeaveCopy();
-        if (IsAdolescent(go)) {
-            AddOneToName();
-            MoveForward();
-            AddLink(pos, go.transform.position);
-        } else {
+        if (IsAdult(go)) {
             GiveBirth();
-            AddOneToName();
-            MoveForward();
-            AddLink(pos, go.transform.position);
+        } else {
+            if (global.ynAudio) global.audioSource2.Play();
         }
+        AddOneToName();
+        MoveForward();
+        //MoveUp();
+        //MoveLeft();
+        AddLinkFrom(pos);
     }
     public void GiveBirth() {
         string nameNew = AddZeroToName(go.name);
@@ -142,7 +195,79 @@ public class NodeClass {
         node.MatchPosition(go);
         node.MoveForward();
         node.MoveRight();
-        AddLink(node.go.transform.position, go.transform.position);
+        //node.MoveDown();
+        node.AddLinkFrom(go.transform.position);
+        if (global.ynAudio) global.audioSource2.Play();
+        if (global.ynAudio) global.audioSource1.Play();
+    }
+    public void AddLinkFrom(Vector3 posFrom)
+    {
+        Vector3 posTo = go.transform.position;
+        GameObject go0 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        global.cntGameObjects++;
+        go0.transform.parent = global.parentLinks.transform;
+        go0.name = "link";
+        float sca = Vector3.Distance(posFrom, posTo);
+        go0.transform.position = (posFrom + posTo) / 2;
+        go0.transform.LookAt(posTo);
+        go0.transform.localScale = new Vector3(.1f, .1f, sca);
+        go0.GetComponent<Renderer>().material.color = Color.grey;
+        //if (index == 0) go0.GetComponent<Renderer>().material.color = Color.red;
+        //if (index == 1) go0.GetComponent<Renderer>().material.color = Color.green;
+        //if (index == 2) go0.GetComponent<Renderer>().material.color = Color.blue;
+        //if (index == 3) go0.GetComponent<Renderer>().material.color = Color.yellow;
+        //if (index == 4) go0.GetComponent<Renderer>().material.color = Color.magenta;
+        //if (index == 5) go0.GetComponent<Renderer>().material.color = Color.grey;
+//        global.lastLinkInRow++;
+    }
+    //public void MoveForwardAutoRight()
+    //{
+    //    Debug.Log(go.name + " " + global.lastLinkInRow + "\n");
+    //    MoveForward();
+    //    for (int n = 0; n < global.lastLinkInRow; n++)
+    //    {
+    //        MoveRight();
+    //    }
+    //    global.lastLinkInRow++;
+    //}
+    public void MoveForward()
+    {
+        go.transform.position += Vector3.forward * global.lengthLinksForward;
+        textGo.transform.position += Vector3.forward * global.lengthLinksForward;
+    }
+    public void MoveLeft()
+    {
+        float dist = global.lengthLinksLeft; // * (global.levelMax - global.level);
+        go.transform.position += Vector3.right * dist;
+        textGo.transform.position += Vector3.right * dist;
+    }
+    public void MoveRight()
+    {
+        float dist = global.lengthLinksRight; // * (global.levelMax - global.level);
+        go.transform.position += Vector3.right * dist;
+        textGo.transform.position += Vector3.right * dist;
+    }
+    public void MoveLeftHalf()
+    {
+        float dist = global.lengthLinksLeft / 2; // * (global.levelMax - global.level);
+        go.transform.position += Vector3.right * dist;
+        textGo.transform.position += Vector3.right * dist;
+    }
+    public void MoveRightHalf()
+    {
+        float dist = global.lengthLinksRight / 2; // * (global.levelMax - global.level);
+        go.transform.position += Vector3.right * dist;
+        textGo.transform.position += Vector3.right * dist;
+    }
+    public void MoveDown()
+    {
+        go.transform.position += Vector3.up * global.lengthLinksDown;
+        textGo.transform.position += Vector3.up * global.lengthLinksDown;
+    }
+    public void MoveUp()
+    {
+        go.transform.position += Vector3.up * global.lengthLinksUp;
+        textGo.transform.position += Vector3.up * global.lengthLinksUp;
     }
     public void MatchPosition(GameObject go0)
     {
@@ -158,16 +283,6 @@ public class NodeClass {
         goCopy.transform.position = go.transform.position;
         Text textGo0 = CreateText(getTextPos(goCopy), goCopy.name);
         AdjustTextColor(goCopy, textGo0);
-    }
-    public void AddLink(Vector3 posFrom, Vector3 posTo) {
-        GameObject go0 = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        go0.transform.parent = global.parentLinks.transform;
-        go0.name = "link";
-        float sca = Vector3.Distance(posFrom, posTo);
-        go0.transform.position = (posFrom + posTo) / 2;
-        go0.transform.LookAt(posTo);
-        go0.transform.localScale = new Vector3(.1f, .1f, sca);
-        go0.GetComponent<Renderer>().material.color = Color.gray;
     }
     public string AddZeroToName(string nameCheck)
     {
@@ -187,34 +302,25 @@ public class NodeClass {
     }
     public void AdjustTextColor(GameObject go0, Text textGo0) {
         Color col = Color.black;
-        if (IsAdolescent(go0))
+        if (IsAdult(go0))
         {
-            col = Color.blue;
+            col = Color.white;
         }
         else
         {
-            col = Color.white;
+            col = Color.blue;
         }
         textGo0.color = col;
     }
     public Vector3 getTextPos(GameObject go0) {
          return go0.transform.position + Vector3.up * .15f;
     }
-    public void MoveForward() {
-        go.transform.position += Vector3.forward * global.lengthLinks;
-        textGo.transform.position += Vector3.forward * global.lengthLinks;
-    }
-    public void MoveRight()
-    {
-        go.transform.position += Vector3.right * global.lengthLinks;
-        textGo.transform.position += Vector3.right * global.lengthLinks;
-    }
     public void AdjustColorByName(GameObject go0) {
         Color col = Color.black;
-        if (IsAdolescent(go0)) {
-            col = Color.white;            
-        } else {
+        if (IsAdult(go0)) {
             col = Color.blue;            
+        } else {
+            col = Color.white;            
         }
         Color colBefore = go0.GetComponent<Renderer>().material.color;
         go0.GetComponent<Renderer>().material.color = col;
@@ -241,13 +347,13 @@ public class NodeClass {
     public string GetRightChar(string nameCheck) {
         return nameCheck.Substring(nameCheck.Length - 1, 1);
     }
-    public bool IsAdolescent(GameObject go0) {
+    public bool IsAdult(GameObject go0) {
         string nameCheck = go0.name;
         string rightChar = GetRightChar(nameCheck);
         if (rightChar == "0") {
-            return true;
-        } else {
             return false;
+        } else {
+            return true;
         }
     }
     public int GetLevel() {
@@ -304,6 +410,7 @@ public class NodeClass {
     Text CreateText(Vector3 pos, string txt)
     {
         GameObject go0 = new GameObject("text");
+        global.cntGameObjects++;
         go0.name = txt;
         go0.transform.SetParent(GameObject.Find("Canvas").transform);
         go0.transform.Rotate(89, 0, 0);
