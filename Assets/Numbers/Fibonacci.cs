@@ -10,14 +10,20 @@ public class Fibonacci : MonoBehaviour {
     public float delay = 1;
     public int life;
     public GlobalClass global;
-    int maxCells = 10;
+    int maxCells = 100;
+    CellClass cellFirst;
 
     // Use this for initialization
 	void Start () {
-        Fib();
+//        Fib();
+        Test();
         //TestClass test = new TestClass();
         //test.Birth();
 	}
+
+    void Test() {
+              
+    }
 	
 	// Update is called once per frame
 	void Update () {
@@ -45,7 +51,11 @@ public class Fibonacci : MonoBehaviour {
         global.sUp = -1;
         global.sForward = 2;
         global.parentCircles = new GameObject("parentCircles");
-        CellClass cellFirst = new CellClass(null, global);
+        global.parentLinks = new GameObject("parentLinks");
+        global.colorBlue = new Color(0, 0, 1, .875f);
+        global.colorWhite = new Color(.95f, .95f, 1, .875f);
+        global.colorRed = new Color(.95f, 0, 0, .875f);
+        cellFirst = new CellClass(null, global);
     } 
     public void UpdateCycle() {
         AddCircle(Vector3.zero, (life + 1) * global.sForward);
@@ -116,16 +126,18 @@ public class CellClass {
         global.lastCell++;
     }
     string getName() {
-        return c + " cell age:" + age;
+        string txt = "first";
+        if (goParent != null) {
+            txt = goParent.go.name;
+        }
+        return c + " cell age:" + age + " (" + txt + ")";
     }
     public void Live() {
-        if (global.ynLeaveTrail == true)
-        {
-            LeaveCopy();
-        }
-        ChangeColorWhenMature();
+        LeaveCopy();
         age++;
+        UpdateColorByAge();
         UpdateNameWithAge();
+//        LeaveCopy();
         GiveBirthIfMature();
         MoveForward();
     }
@@ -137,35 +149,58 @@ public class CellClass {
         }
         Debug.Log("birth:" + go.name + "\n");
         //return;
+        Vector3 posLast = go.transform.position;
         CellClass goChild = new CellClass(this, global);
         goChild.go.transform.position = go.transform.position;
         goChild.go.transform.eulerAngles = go.transform.eulerAngles;
-        goChild.go.transform.position += goChild.go.transform.up * global.sUp;
+        goChild.go.transform.position += goChild.go.transform.forward * global.sForward;
         goChild.go.transform.position += goChild.go.transform.right * global.sRight;
-        goChild.go.GetComponent<Renderer>().material.color = new Color(.95f, .95f, 1, .875f);
+        goChild.go.GetComponent<Renderer>().material.color = global.colorWhite;
+        CreateLink(posLast, goChild.go.transform.position);
     }
     void UpdateNameWithAge() {
         go.name = getName();
     }
-    public void ChangeColorWhenMature() {
+    public void UpdateColorByAge() {
         if (age == 1)
         {
-            go.GetComponent<Renderer>().material.color = new Color(0, 0, 1, .875f);
+            go.GetComponent<Renderer>().material.color = global.colorWhite;
+        } else {
+            go.GetComponent<Renderer>().material.color = global.colorBlue;
         }
     }
     public void LeaveCopy()
     {
-        if (age == 0) {
+        if (global.ynLeaveTrail == false)
+        {
             return;
         }
+        //if (age <= 1) {
+        //    return;
+        //}
         GameObject goCopy = CreateCellGo();
         goCopy.transform.position = go.transform.position;
         goCopy.transform.eulerAngles = go.transform.eulerAngles;
-        goCopy.GetComponent<Renderer>().material.color = new Color(0, 0, 1, .875f);
+        goCopy.GetComponent<Renderer>().material.color = go.GetComponent<Renderer>().material.color;
         goCopy.name = "copy " + getName();
     }
     public void MoveForward() {
+        if (age <= 1)
+        {
+            return;
+        }
+        Vector3 posLast = go.transform.position;
         go.transform.position += go.transform.forward * global.sForward;
+        Debug.Log("Move:" + go.name + "\n");
+        CreateLink(posLast, go.transform.position);
+    }
+    void CreateLink(Vector3 posFrom, Vector3 posTo) {
+        GameObject go0 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        go0.transform.parent = global.parentLinks.transform;
+        float dist = Vector3.Distance(posFrom, posTo);
+        go0.transform.position = (posFrom + posTo) / 2;
+        go0.transform.LookAt(posTo);
+        go0.transform.localScale = new Vector3(.1f, .1f, dist);
     }
     void MakeMaterialTransparent(Material material)
     {
@@ -182,7 +217,7 @@ public class CellClass {
         go0.name = "?";
         go0.transform.localScale = new Vector3(1, .125f, 1);
         MakeMaterialTransparent(go0.GetComponent<Renderer>().material);
-        go0.GetComponent<Renderer>().material.color = new Color(1, 0, 0, .125f);
+        go0.GetComponent<Renderer>().material.color = global.colorRed;
         return go0;
     }
     public void Show() {
@@ -197,4 +232,9 @@ public class GlobalClass {
     public float sUp;
     public float sForward;
     public GameObject parentCircles;
+    public GameObject parentLinks;
+    public Color colorWhite;
+    public Color colorBlue;
+    public Color colorRed;
 }
+
