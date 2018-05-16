@@ -9,11 +9,12 @@ public class Fib : MonoBehaviour {
 	// Use this for initialization
 	void Start () {
         global = new GlobalClassTiny();
-        global.levelMax = 4;
-        global.ynStep = true;
-        global.ynStepEach = true;
+        global.levelMax = 1; //3;
+        global.ynStep = false;
+        global.ynStepEach = false;
         global.delay = .5f;
         global.scaleHistory = .75f;
+        global.heightNode = .5f;
         global.lengthLinksForward = 2;
         global.lengthLinksLeft = -2;
         global.lengthLinksRight = 2;
@@ -26,6 +27,8 @@ public class Fib : MonoBehaviour {
         global.audioSource2 = gameObject.AddComponent<AudioSource>();
         global.audioSource2.clip = Resources.Load("sound2") as AudioClip;
         global.ynAudio = false;
+        global.smooth = .05f;
+        global.ynSmooth = false;
         global.timeStart = Time.realtimeSinceStartup;
         Debug.Log("Fib\n");
         Show();
@@ -34,8 +37,15 @@ public class Fib : MonoBehaviour {
 //        Manual();
 	}
 
-    void Radius() {
-        
+    void AfterUpdate()
+    {
+        if (global.ynAfterUpdateDone == false)
+        {
+            global.ynAfterUpdateDone = true;
+            Find("1").Move("up");
+            Find("1").UpdateLink();
+            Debug.Log("After\n");
+        }
     }
 
     void Manual() {
@@ -58,11 +68,26 @@ public class Fib : MonoBehaviour {
 
     // Update is called once per frame
 	void Update () {
+        if (global.ynSmooth == true)
+        {
+            UpdateSmooth();
+            //            return;
+        }
+        bool ynExit = false;
         if (global.ynStep == true && Time.realtimeSinceStartup - global.timeStart < global.delay) {
-            return;
+            ynExit = true;
+        }
+        if (global.level >= global.levelMax)
+        {
+            AfterUpdate();
+            ynExit = true;
         }
         if (global.level >= global.levelMax && global.index >= global.nodes.Count)
         {
+            AfterUpdate();
+            ynExit = true;
+        }
+        if (ynExit == true) {
             return;
         }
         global.timeStart = Time.realtimeSinceStartup;
@@ -72,6 +97,15 @@ public class Fib : MonoBehaviour {
             UpdateNodes();
         }
 	}
+
+    void UpdateSmooth() {
+        //Debug.Log(".\n");
+        for (int n = 0; n < global.nodes.Count; n++)
+        {
+            NodeClass node = global.nodes[n];
+            node.MoveSmooth();
+        }
+    }
 
     void ResetLevel() {
         global.index = 0;
@@ -119,6 +153,7 @@ public class GlobalClassTiny {
     public float lengthLinksRight;
     public float lengthLinksUp;
     public float lengthLinksDown;
+    public float heightNode;
     public float scaleHistory;
     public GameObject parentLinks;
     public int lastLinkInRow;
@@ -128,20 +163,27 @@ public class GlobalClassTiny {
     public AudioSource audioSource1;
     public AudioSource audioSource2;
     public bool ynAudio;
+    public bool ynAfterUpdateDone;
+    public bool ynSmooth;
+    public float smooth;
 }
 
 public class NodeClass {
+    public Vector3 posTarget;
     public bool ynJustBorn;
     public GameObject go;
     public int index;
     GlobalClassTiny global;
     public Text textGo;
+    public GameObject linkGo;
+    public Vector3 posFromLink; 
     public NodeClass(string name0, GlobalClassTiny global0) {
         global = global0;
         ynJustBorn = false;
         go = AddGo(name0);
         Vector3 pos = getTextPos(go);
         textGo = CreateText(pos, go.name);
+        AdjustTextColor(go, textGo);
         AddToNodes(this);
     }
     public static NodeClass FindNode(string nameCheck, List<NodeClass>nodes) {
@@ -154,12 +196,79 @@ public class NodeClass {
         }
         return result;
     }
+    public void AdvanceLevel()
+    {
+        if (ynJustBorn == true)  // infant in embryo cycle, not on its own yet !!
+        {
+            ynJustBorn = false;
+            return;
+        }
+        Vector3 posFrom = go.transform.position;
+        LeaveCopy();
+        if (IsAdult(go))
+        {
+            GiveBirth();
+        }
+        AddOneToName();
+        MoveAdult(this);
+        AddLinkFrom(posFrom);
+        PlayAudio();
+    }
+    public void AddLinkFrom(Vector3 posFrom)
+    {
+        posFromLink = posFrom;
+        Vector3 posTo = go.transform.position;
+        linkGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+        global.cntGameObjects++;
+        linkGo.transform.parent = global.parentLinks.transform;
+        linkGo.name = "link " + go.name;
+        UpdateLink();
+        linkGo.GetComponent<Renderer>().material.color = Color.grey;
+    }
+    public void UpdateLink()
+    {
+        Vector3 posFrom = posFromLink;
+        Vector3 posTo = go.transform.position;
+        float sca = Vector3.Distance(posFrom, posTo);
+        linkGo.transform.position = (posFrom + posTo) / 2;
+        linkGo.transform.LookAt(posTo);
+        linkGo.transform.localScale = new Vector3(.1f, .1f, sca);
+    }
+    public void GiveBirth()
+    {
+        string nameNew = AddZeroToName(go.name);
+        NodeClass node = new NodeClass(nameNew, global);
+        node.ynJustBorn = true;
+        node.MatchPosition(go);
+        Vector3 posFrom = go.transform.position;
+        MoveInfant(node);
+        node.AddLinkFrom(posFrom);
+    }
+    public void PlayAudio() {
+        if (global.ynAudio == false)
+        {
+            return;
+        }
+        if (IsAdult(go)) {
+            PlayAudioAdult();
+        } else {
+            PlayAudioInfant();
+        }
+     }
+    public void PlayAudioInfant() {
+        global.audioSource2.Play();
+    }
+    public void PlayAudioAdult()
+    {
+        global.audioSource2.Play();
+        global.audioSource1.Play();
+    }
     public GameObject AddGo(string txt)
     {
         GameObject goResult = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
         global.cntGameObjects++;
         goResult.name = txt;
-        goResult.transform.localScale = new Vector3(1f, .1f, 1f);
+        goResult.transform.localScale = new Vector3(1f, global.heightNode, 1f);
         AdjustColorByName(goResult);
         goResult.name = txt;
         return goResult;
@@ -169,105 +278,46 @@ public class NodeClass {
         global.nodes.Add(node);
         node.index = global.nodes.Count - 1;
     }
-    public void AdvanceLevel()
+    public void MoveAdult(NodeClass adult) {
+        adult.Move("forward");
+        //adult.Move("up");
+        //adult.Move("left");
+    }
+    public void MoveInfant(NodeClass infant)
     {
-        if (ynJustBorn == true) {
-            ynJustBorn = false;
-            return;
-        }
-        Vector3 pos = go.transform.position;
-        LeaveCopy();
-        if (IsAdult(go)) {
-            GiveBirth();
+        infant.Move("forward");
+        infant.Move("right");
+        //infant.Move("down");
+    }
+    public void Move(string direction) {
+        if (direction == "forward") {
+            posTarget = go.transform.position + Vector3.forward * global.lengthLinksForward;
+        }        
+        if (direction == "right") {
+            posTarget = go.transform.position + Vector3.right * global.lengthLinksRight;
+        }        
+        if (direction == "up") {
+            posTarget = go.transform.position + Vector3.up * global.lengthLinksUp;
+        }        
+        if (global.ynSmooth == true) {
+            MoveSmooth();
         } else {
-            if (global.ynAudio) global.audioSource2.Play();
+            MoveToTarget();
         }
-        AddOneToName();
-        MoveForward();
-        //MoveUp();
-        //MoveLeft();
-        AddLinkFrom(pos);
-    }
-    public void GiveBirth() {
-        string nameNew = AddZeroToName(go.name);
-        NodeClass node = new NodeClass(nameNew, global);
-        node.ynJustBorn = true;
-        node.MatchPosition(go);
-        node.MoveForward();
-        node.MoveRight();
-        //node.MoveDown();
-        node.AddLinkFrom(go.transform.position);
-        if (global.ynAudio) global.audioSource2.Play();
-        if (global.ynAudio) global.audioSource1.Play();
-    }
-    public void AddLinkFrom(Vector3 posFrom)
+    } 
+    public void MoveSmooth()
     {
-        Vector3 posTo = go.transform.position;
-        GameObject go0 = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        global.cntGameObjects++;
-        go0.transform.parent = global.parentLinks.transform;
-        go0.name = "link";
-        float sca = Vector3.Distance(posFrom, posTo);
-        go0.transform.position = (posFrom + posTo) / 2;
-        go0.transform.LookAt(posTo);
-        go0.transform.localScale = new Vector3(.1f, .1f, sca);
-        go0.GetComponent<Renderer>().material.color = Color.grey;
-        //if (index == 0) go0.GetComponent<Renderer>().material.color = Color.red;
-        //if (index == 1) go0.GetComponent<Renderer>().material.color = Color.green;
-        //if (index == 2) go0.GetComponent<Renderer>().material.color = Color.blue;
-        //if (index == 3) go0.GetComponent<Renderer>().material.color = Color.yellow;
-        //if (index == 4) go0.GetComponent<Renderer>().material.color = Color.magenta;
-        //if (index == 5) go0.GetComponent<Renderer>().material.color = Color.grey;
-//        global.lastLinkInRow++;
+        go.transform.position = (1f -global.smooth) * go.transform.position + global.smooth * posTarget;        
+        textGo.transform.position = getTextPos(go);
+        if (linkGo != null)
+        {
+            UpdateLink();
+        }
     }
-    //public void MoveForwardAutoRight()
-    //{
-    //    Debug.Log(go.name + " " + global.lastLinkInRow + "\n");
-    //    MoveForward();
-    //    for (int n = 0; n < global.lastLinkInRow; n++)
-    //    {
-    //        MoveRight();
-    //    }
-    //    global.lastLinkInRow++;
-    //}
-    public void MoveForward()
+    public void MoveToTarget()
     {
-        go.transform.position += Vector3.forward * global.lengthLinksForward;
-        textGo.transform.position += Vector3.forward * global.lengthLinksForward;
-    }
-    public void MoveLeft()
-    {
-        float dist = global.lengthLinksLeft; // * (global.levelMax - global.level);
-        go.transform.position += Vector3.right * dist;
-        textGo.transform.position += Vector3.right * dist;
-    }
-    public void MoveRight()
-    {
-        float dist = global.lengthLinksRight; // * (global.levelMax - global.level);
-        go.transform.position += Vector3.right * dist;
-        textGo.transform.position += Vector3.right * dist;
-    }
-    public void MoveLeftHalf()
-    {
-        float dist = global.lengthLinksLeft / 2; // * (global.levelMax - global.level);
-        go.transform.position += Vector3.right * dist;
-        textGo.transform.position += Vector3.right * dist;
-    }
-    public void MoveRightHalf()
-    {
-        float dist = global.lengthLinksRight / 2; // * (global.levelMax - global.level);
-        go.transform.position += Vector3.right * dist;
-        textGo.transform.position += Vector3.right * dist;
-    }
-    public void MoveDown()
-    {
-        go.transform.position += Vector3.up * global.lengthLinksDown;
-        textGo.transform.position += Vector3.up * global.lengthLinksDown;
-    }
-    public void MoveUp()
-    {
-        go.transform.position += Vector3.up * global.lengthLinksUp;
-        textGo.transform.position += Vector3.up * global.lengthLinksUp;
+        go.transform.position = posTarget;
+        textGo.transform.position = getTextPos(go);
     }
     public void MatchPosition(GameObject go0)
     {
@@ -279,7 +329,7 @@ public class NodeClass {
     {
         string nameCopy = go.name;
         GameObject goCopy = AddGo(nameCopy);
-        goCopy.transform.localScale = new Vector3(global.scaleHistory, .1f, global.scaleHistory);
+        goCopy.transform.localScale = new Vector3(global.scaleHistory, global.scaleHistory * global.heightNode, global.scaleHistory);
         goCopy.transform.position = go.transform.position;
         Text textGo0 = CreateText(getTextPos(goCopy), goCopy.name);
         AdjustTextColor(goCopy, textGo0);
@@ -313,7 +363,7 @@ public class NodeClass {
         textGo0.color = col;
     }
     public Vector3 getTextPos(GameObject go0) {
-         return go0.transform.position + Vector3.up * .15f;
+        return go0.transform.position + Vector3.up * (global.heightNode + .1f);
     }
     public void AdjustColorByName(GameObject go0) {
         Color col = Color.black;
