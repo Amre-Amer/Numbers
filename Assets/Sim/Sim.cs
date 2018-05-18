@@ -7,11 +7,28 @@ public class GlobalSimClass
 {
     public int level;
 	public int cntSims;
-	public int numLevels = 8; //10;
+	public int numLevels = 9; //10;
     public List<SimClass> sims;
 	public List<string>[] nodes;
 	public List<bool>[] values;
 	public bool ynFlag;
+	public bool ynRadial = false; // true;
+	public float angRange = 360;
+	public float timeStart;
+	public float delay = .25f;
+	public bool ynDelay = true;
+	public int dataOffset = 0; 
+	public int dataStride = 4; 
+	public int dataModulus = 0;
+	public GameObject parent;
+	public GlobalSimClass() {
+		sims = new List<SimClass>();
+        nodes = new List<string>[numLevels];
+        values = new List<bool>[numLevels];
+		timeStart = Time.realtimeSinceStartup;
+		parent = new GameObject("parent");
+//		SimClass sim = new SimClass("0", this);
+	}
 }
 
 public class Sim : MonoBehaviour
@@ -23,9 +40,6 @@ public class Sim : MonoBehaviour
 	}
 	void Test() {
 		global = new GlobalSimClass();
-        global.sims = new List<SimClass>();
-		global.nodes = new List<string>[global.numLevels];
-		global.values = new List<bool>[global.numLevels];
         SimClass sim = new SimClass("0", global);
 	}
 	void Update()
@@ -49,10 +63,16 @@ public class Sim : MonoBehaviour
 		}
 	}
 	void Process() {
-		if (global.ynFlag == true) {
+		if (global.ynDelay == true && Time.realtimeSinceStartup - global.timeStart < global.delay) {
 			return;
 		}
-		global.ynFlag = true;
+		global.timeStart = Time.realtimeSinceStartup;
+		//Debug.Log("Process:\n");
+		if (global.ynFlag == true) {
+//			return;
+		}
+		//		global.ynFlag = true;
+		ClearValuesAndData();
 		LoadData();
 		for (int level = global.numLevels - 2; level > 0; level--) {
 			for (int n = 0; n < global.nodes[level].Count; n++) {
@@ -64,7 +84,40 @@ public class Sim : MonoBehaviour
 			}
 		}
 		ShowData();
+		global.dataOffset++;
+//		global.dataStride++;
+//		global.dataModulus++;
 	}
+	void ClearValuesAndData() {
+		if (global.parent != null) {
+			DestroyImmediate(global.parent);
+		}
+		global.parent = new GameObject("parent");
+	}
+	void LoadData()
+    {
+//		Debug.Log("LoadData:dataOffset:" + global.dataOffset + " dataStride:" + global.dataStride + " dataModulus:" + global.dataModulus + "\n");
+        List<bool> groupValues = global.values[global.numLevels - 1];
+		string txt = "";
+        for (int n = 0; n < groupValues.Count; n++)
+        {
+//			if ((n + global.dataOffset) % global.dataStride == global.dataModulus)
+			if ((n + global.dataOffset) % 5 >= 3)
+            {
+                groupValues[n] = true;
+            }
+            else
+            {
+                groupValues[n] = false;
+            }
+			//if (n == 0)
+			//{
+			//	Debug.Log("n:" + n + " value:" + groupValues[n] + "\n");
+			//}
+			txt += groupValues[n].ToString() + ", ";
+        }
+		Debug.Log("LoadData:" + txt + "\n");
+    }
 	void ShowData() {
 		int level = global.numLevels - 1;
 		for (int n = 0; n < global.nodes[level].Count; n++)
@@ -77,6 +130,7 @@ public class Sim : MonoBehaviour
 	void ShowValue(string nam, int level, bool yn) {
 		GameObject goNode = GameObject.Find(nam);
 		GameObject go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+		go.transform.parent = global.parent.transform;
 		go.transform.position = goNode.transform.position;
 		go.transform.position += go.transform.up * -1;
 		go.transform.eulerAngles = goNode.transform.eulerAngles;
@@ -104,7 +158,7 @@ public class Sim : MonoBehaviour
         {
 			cnt++;
         }
-        if (nam.Substring(nam.Length - 1, 1) != "0")
+		if (SimClass.HasZeroRight(nam) == false)
         {
             txt = SimClass.AddZero(nam);
             n = global.nodes[level + 1].IndexOf(txt);
@@ -117,17 +171,6 @@ public class Sim : MonoBehaviour
 			yn = true;
 		}
 		return yn;
-	}
-	void LoadData() {
-		Debug.Log("LoadData\n");
-		List<bool> groupValues = global.values[global.numLevels - 1];
-		for (int n = 0; n < groupValues.Count; n++) {
-			if (n % 3 == 0) {
-				groupValues[n] = true;
-			} else {
-				groupValues[n] = false;
-			}
-		}
 	}
 	void ShowLinkPrevious(string namTo) {
 		string nameFrom = GetPrevious(namTo);
@@ -146,7 +189,7 @@ public class Sim : MonoBehaviour
 	}
 	string GetPrevious(string nam) {
 		string result = "?";
-		if (nam.Substring(nam.Length - 1, 1) == "0")
+		if (SimClass.HasZeroRight(nam) == true) 
         {
 			result = nam.Substring(0, nam.Length - 1);
 		} else {
@@ -166,8 +209,12 @@ public class Sim : MonoBehaviour
 			string nam = group[n];
 			GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = nam;
-			go.transform.position = GetPos(n);
-//			SetPosRotRadial(n, go);
+			//			go.transform.position = GetPos(n);
+			if (global.ynRadial == true) {
+				SetPosRotRadial(n, go);
+			} else {
+	            SetPosition(n, go);
+			}
 			ColorPeer(n, go);
 			float wText = .65f;
             float s = nam.Length * wText;
@@ -177,6 +224,38 @@ public class Sim : MonoBehaviour
 			CreateText(go, nam);
 		}
 	}
+	void SetPosition(int n, GameObject go)
+    {
+        go.transform.position = GetPos(n);
+    }
+    Vector3 GetPos(int n)
+    {
+        float w = 4;
+        float h = -4;
+        float x = n * w - (global.nodes[global.level].Count * w / 2);
+        float y = global.level * h;
+        float z = 0;
+        return new Vector3(x, y, z);
+    }
+    void SetPosRotRadial(int n, GameObject go)
+    {
+        float w = 4;
+        float h = -4;
+        int num = global.nodes[global.level].Count;
+        if (num <= 1)
+        {
+            go.transform.position = Vector3.zero;
+            return;
+        }
+		float angDiff = global.angRange / num;
+        float ang = n * angDiff;
+        float rad = (global.nodes[global.level].Count - 1) * w / (2 * Mathf.PI);
+        float x = rad * Mathf.Cos(ang * Mathf.Deg2Rad);
+        float y = global.level * h;
+        float z = rad * Mathf.Sin(ang * Mathf.Deg2Rad);
+        go.transform.position = new Vector3(x, y, z);
+        go.transform.eulerAngles = new Vector3(0, 270 - ang, 0);
+    }
 	Text CreateText(GameObject go, string txt)
     {
         GameObject go0 = new GameObject("text");
@@ -192,7 +271,7 @@ public class Sim : MonoBehaviour
         text.fontSize = 40;
         text.name = "." + go0.name + ".";
         text.horizontalOverflow = HorizontalWrapMode.Overflow;
-        if (txt.Substring(txt.Length - 1, 1) == "0")
+		if (SimClass.HasZeroRight(txt) == true)
         {
             text.color = Color.black;
         }
@@ -204,34 +283,9 @@ public class Sim : MonoBehaviour
         text.text = txt;
         return text;
     }
-	Vector3 GetPos(int n) {
-		float w = 4;
-		float h = -4;
-		float x = n * w - (global.nodes[global.level].Count * w / 2);
-        float y = global.level * h;
-        float z = 0;
-		return new Vector3(x, y, z);
-	}
-	void SetPosRotRadial(int n, GameObject go) {
-		float w = 4;
-        float h = -4;
-		int num = global.nodes[global.level].Count;
-		if (num <= 1) {
-			go.transform.position = Vector3.zero;
-			return;
-		}
-        float angDiff = 360f / num;
-		float ang = n * angDiff;
-		float rad = (global.nodes[global.level].Count - 1) * w / (2 * Mathf.PI);
-		float x = rad * Mathf.Cos(ang * Mathf.Deg2Rad);
-        float y = global.level * h;
-		float z = rad * Mathf.Sin(ang * Mathf.Deg2Rad);
-		go.transform.position = new Vector3(x, y, z);
-		go.transform.eulerAngles = new Vector3(0, 270 - ang, 0);
-	}
 	void ColorPeer(int n, GameObject go) {
 		string nam = global.nodes[global.level][n];
-		if (nam.Substring(nam.Length - 1, 1) == "0")
+		if (SimClass.HasZeroRight(nam) == true) 
         {
             go.GetComponent<Renderer>().material.color = Color.white;
         }
@@ -294,6 +348,14 @@ public class SimClass {
 		int num = int.Parse(txt);
         num *= 10;
 		return num.ToString();
+	}
+	public static bool HasZeroRight(string nam) {
+		if (nam.Substring(nam.Length - 1, 1) == "0")
+        {
+			return true;
+		} else {
+			return false;
+		}
 	}
 }
 
