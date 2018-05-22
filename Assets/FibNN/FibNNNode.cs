@@ -20,58 +20,86 @@ public class FibNNNode
     public GameObject goValue;
 	public GameObject goGraph;
 	public GameObject goGraphBack;
+	public GameObject pointGo;
+	public float maxHeight = 10;
+	public Vector3 position;
+	public Vector3 posPoint;
 	public FibNNNode(string name0, FibNNManager fibManager0)
     {
         name = name0;
         fibManager = fibManager0;
         //
-        go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-		fibManager.cntGos++;
-        go.name = name;
-        fibManager.MakeMaterialTransparent(go.GetComponent<Renderer>().material);
-        //
+		if (fibManager.ynMesh == false)
+		{
+			go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.transform.parent = fibManager.parentNodes.transform;
+            fibManager.cntGos++;
+            go.name = name;
+            fibManager.MakeMaterialTransparent(go.GetComponent<Renderer>().material);
+			//
+			goTextName = fibManager.CreateText(go, name);
+			goTextValue = fibManager.CreateText(go, FormatValue(value));
+			//
+			goValue = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+			goValue.transform.parent = fibManager.parent.transform;
+			fibManager.cntGos++;
+			goValue.name = "value " + name;
+			goGraphBack = GameObject.CreatePrimitive(PrimitiveType.Cube);
+			goGraphBack.transform.parent = fibManager.parent.transform;
+			fibManager.cntGos++;
+			goGraphBack.name = "graphback " + name;
+			fibManager.MakeMaterialTransparent(goGraphBack.GetComponent<Renderer>().material);
+			//
+			goGraph = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            goGraph.transform.parent = fibManager.parent.transform;
+            fibManager.cntGos++;
+            goGraph.name = "graph " + name;
+            fibManager.MakeMaterialTransparent(goGraph.GetComponent<Renderer>().material);
+		}
+		//
         goLink = GameObject.CreatePrimitive(PrimitiveType.Cube);
-		fibManager.cntGos++;
+        fibManager.cntGos++;
         goLink.transform.parent = fibManager.parent.transform;
         goLink.name = "link " + name;
+//		goLink.name = "link " + name + " -> " + fibNodeFrom.name;
+        goLink.GetComponent<Renderer>().material.color = Color.grey;
         //
-        goTextName = fibManager.CreateText(go, name);
-        goTextValue = fibManager.CreateText(go, FormatValue(value));
-        //
-        goValue = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-		fibManager.cntGos++;
-        goValue.name = "value " + name;
-		//
-		goGraph = GameObject.CreatePrimitive(PrimitiveType.Cube);
-		fibManager.cntGos++;
-		goGraph.name = "graph " + name;
-		fibManager.MakeMaterialTransparent(goGraph.GetComponent<Renderer>().material);
-		goGraphBack = GameObject.CreatePrimitive(PrimitiveType.Cube);
-		fibManager.cntGos++;
-        goGraphBack.name = "graphback " + name;
-		fibManager.MakeMaterialTransparent(goGraphBack.GetComponent<Renderer>().material);
+		pointGo = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+        pointGo.transform.parent = fibManager.parent.transform;
 		//
 		fibManager.cntNodes++;
     }
     public void Update()
     {
         UpdateGo();
-        UpdateLink();
         UpdateTextName();
         UpdateTextValue();
 		UpdateGraph();
+		UpdatePoint();
+		UpdateLink();
     }
     public string FormatValue(float val)
     {
-        return val.ToString("F0");
+        return val.ToString("F2");
     }
+	public void UpdatePoint() {
+		pointGo.transform.position = posPoint;		
+	}
 	public void UpdateGraph() {
-		goGraphBack.transform.position = go.transform.position + go.transform.up * 2;
-        goGraphBack.GetComponent<Renderer>().material.color = new Color(.25f, .25f, .25f, .125f);
+		float h = value;
+		posPoint = position + Vector3.forward * -h;
+		if (fibManager.ynMesh == true)
+		{
+			return;
+		}
+		Vector3 pos = position + Vector3.up * 2;
+		goGraphBack.transform.position = pos;
+		goGraphBack.GetComponent<Renderer>().material.color = new Color(.25f, .25f, .25f, .125f);
 		//
-		float h = value / 10f;
-		goGraph.transform.position = goGraphBack.transform.position; // + go.transform.up * h / 2;
-		goGraph.transform.localScale = new Vector3(1, 1, h);
+		goGraph.transform.position = pos;
+		//
+		goGraph.transform.position += goGraph.transform.forward * -h / 2;
+        goGraph.transform.localScale = new Vector3(1, h / 10, h);
 		if (value > 0)
 		{
 			goGraph.GetComponent<Renderer>().material.color = new Color(0, 1, 0, 1);
@@ -81,6 +109,7 @@ public class FibNNNode
 	}
     public void UpdateTextValue()
     {
+		if (fibManager.ynMesh == true) return;
         string txt = FormatValue(value);
         Text text = goTextValue.GetComponent<Text>();
         text.text = txt;
@@ -107,6 +136,7 @@ public class FibNNNode
     }
     public void UpdateTextName()
     {
+		if (fibManager.ynMesh == true) return;
         string txt = name;
         Text text = goTextName.GetComponent<Text>();
         text.text = txt;
@@ -126,7 +156,9 @@ public class FibNNNode
     }
     public void UpdateGo()
     {
-        go.transform.position = new Vector3(index * 3, level * 4, 0);
+		position = new Vector3(index * 3, level * 14, 0);
+		if (fibManager.ynMesh == true) return;
+		go.transform.position = position;
         go.name = name;
         if (fibManager.IsAdult(this) == true)
         {
@@ -139,11 +171,9 @@ public class FibNNNode
     }
     public void UpdateLink()
     {
-        goLink.name = "link " + name + " -> " + fibNodeFrom.name;
-        goLink.transform.position = (go.transform.position + fibNodeFrom.go.transform.position) / 2;
-        goLink.transform.LookAt(go.transform.position);
-        float dist = Vector3.Distance(go.transform.position, fibNodeFrom.go.transform.position);
+		goLink.transform.position = (posPoint + fibNodeFrom.posPoint) / 2;
+		goLink.transform.LookAt(posPoint);
+		float dist = Vector3.Distance(posPoint, fibNodeFrom.posPoint);
         goLink.transform.localScale = new Vector3(.1f, .1f, dist);
-        goLink.GetComponent<Renderer>().material.color = Color.grey;
     }
 }

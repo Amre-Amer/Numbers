@@ -8,22 +8,26 @@ public class FibNNManager {
 	public List<FibNNNode>[] fibNodes;
 	public int level;
 	public GameObject parent;
+	public GameObject parentNodes;
 	public int indexData;
 	public int cntNodesLastLevel;
 	public int cntNodes;
 	public int cntGos;
+	public bool ynMesh = false;
+	public GameObject meshGo;
 	public FibNNManager(int numLevels0) {
-		numLevels = numLevels0;
+ 		numLevels = numLevels0;
 		InitParent();
 		InitLevels();
 		StartLevels();
 		Debug.Log("FibManager:numLevels:" + numLevels + "\n");
 	}
+	public void InitMesh() {
+		meshGo = new GameObject("meshGo");
+	}
 	public void InitParent() {
-		if (parent != null) {
-//			DestroyImmediate(parent);
-		}
-		parent = new GameObject("parent");
+		parent = new GameObject("misc");
+		parentNodes = new GameObject("nodes");
 	}
 	public void InitLevels() {
 		fibNodes = new List<FibNNNode>[numLevels];
@@ -50,9 +54,8 @@ public class FibNNManager {
                 ShowCurrentLevel();
 			}
 		} else {
-			level = numLevels - 1;
-			cntNodesLastLevel = fibNodes[level].Count;
-            Debug.Log("Nodes:" + cntNodes + " lastLevel:" + cntNodesLastLevel + "\n");
+			GotoLastLevel();
+			ShowStatsLevel(level);
 			StreamData(level);
             ShowCurrentLevel();
             Process();
@@ -62,16 +65,30 @@ public class FibNNManager {
 	}
 	public void StreamData(int lev)
     {
+		bool ynRandom = false;
+		if (indexData % 100 > 50) {
+			ynRandom = true;
+		}
 		Debug.Log("Data:" + indexData + "\n");
         for (int n = 0; n < fibNodes[lev].Count; n++)
         {
             FibNNNode fibNode = fibNodes[lev][n];
-			//float num = (n + indexData) % 2;
+			//float num = (n + indexData) % 2 * 10;
 			float num = Mathf.Cos((n + indexData) * 10 * Mathf.Deg2Rad) * 10;
+			if (ynRandom == true) {
+				num += Random.Range(-1f, 1f) * 3;
+			}
             fibNode.value = num;
         }
 		indexData++;
     }
+	public void GotoLastLevel() {
+		level = numLevels - 1;
+	}
+	public void ShowStatsLevel(int lev) {
+		cntNodesLastLevel = fibNodes[lev].Count;
+		Debug.Log("Nodes:" + cntNodes + " lastLevel:" + cntNodesLastLevel + " cntGos:" + cntGos + "\n");
+	}
 	public void UpdateFibNodes()
 	{
 		for (int lev = 0; lev < numLevels; lev++) {
@@ -132,22 +149,31 @@ public class FibNNManager {
 			string txt = "";
 			for (int n = 0; n < fibNodes[lev].Count; n++)
 			{
+				int cnt = 0;
 				float sum = 0;
 				FibNNNode fibNode = fibNodes[lev][n];
 				txt += "name:" + fibNode.name;
 				if (fibNode.fibNodeOffspring != null) {
+					cnt++;
 					sum += fibNode.fibNodeOffspring.value;
 					txt += " offspring:" + fibNode.fibNodeOffspring.name + "(" + fibNode.fibNodeOffspring.value + ")";
 				}
 				if (fibNode.fibNodeToContinue != null) {
+					cnt++;
 					sum += fibNode.fibNodeToContinue.value;
 					txt += " continue:" + fibNode.fibNodeToContinue.name + "(" + fibNode.fibNodeToContinue.value + ")";
 				}
-				fibNode.value = sum;
+//				fibNode.value = (Sigmoid(sum) - .5f) * 10;
+				fibNode.value = Sigmoid(sum) * 10;
+				//fibNode.value = sum / (float)cnt;
+				//float num = sum;
+				//fibNode.value = num;
 				txt += " = " + sum.ToString("F2") + " | ";
 			}
-//			Debug.Log("level:" + lev + " = " + txt + "\n");
 		}	
+	}
+	public float Sigmoid(float f) {
+		return 1 / (1 + Mathf.Exp(-f));		
 	}
 	public void ShowLevels() {
 		for (int lev = 0; lev < numLevels; lev++) {
@@ -168,6 +194,7 @@ public class FibNNManager {
     }
 	public GameObject CreateText(GameObject go, string txt)
     {
+		if (ynMesh == true) return null;
         GameObject goText = new GameObject("text");
 		cntGos++;
 		goText.name = txt;
